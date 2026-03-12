@@ -12,19 +12,23 @@ class KategoriController extends Controller
 {
     /**
      * GET /api/kategori
-     * Menampilkan daftar semua kategori
+     * Menampilkan daftar semua kategori dengan paginasi, filter, dan search.
      */
     public function index(Request $request)
     {
         $query = Kategori::query();
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where('nama_kategori', 'like', '%' . $request->search . '%');
+        }
+
+        if ($request->has('filter.nama_kategori')) {
+            $query->where('nama_kategori', 'like', '%' . $request->input('filter.nama_kategori') . '%');
         }
 
         $query->latest();
 
-        $kategoris = $query->get();
+        $kategoris = $query->paginate(10)->withQueryString();
         return KategoriResource::collection($kategoris);
     }
 
@@ -40,6 +44,15 @@ class KategoriController extends Controller
             ->additional(['message' => 'Kategori berhasil ditambahkan'])
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * GET /api/kategori/{id}
+     * Menampilkan detail kategori.
+     */
+    public function show(Kategori $kategori)
+    {
+        return new KategoriResource($kategori);
     }
 
     /**

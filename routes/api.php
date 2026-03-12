@@ -36,7 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('role:admin,petugas,peminjam');
 
     // User: hanya admin yang bisa mengelola user
-    Route::apiResource('user', UserController::class)
+    Route::apiResource('users', UserController::class)
         ->middleware('role:admin');
 
     // Log aktivitas: hanya admin & petugas yang bisa melihat
