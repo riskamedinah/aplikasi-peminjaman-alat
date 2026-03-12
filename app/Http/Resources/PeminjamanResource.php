@@ -17,13 +17,17 @@ class PeminjamanResource extends JsonResource
         return [
             'id' => $this->id,
             'jumlah' => $this->jumlah,
-            'status' => $this->status,
             'tanggal_pinjam' => $this->tanggal_pinjam,
             'tanggal_kembali_rencana' => $this->tanggal_kembali_rencana,
             'tanggal_kembali_aktual' => $this->tanggal_kembali_aktual,
+            'status' => $this->status,
+            'keterangan' => $this->keterangan,
+            'catatan_petugas' => $this->catatan_petugas,
             'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
             'user' => new UserResource($this->whenLoaded('user')),
             'alat' => new AlatResource($this->whenLoaded('alat')),
+            'petugas' => new UserResource($this->whenLoaded('petugas')),
         ];
     }
 }
