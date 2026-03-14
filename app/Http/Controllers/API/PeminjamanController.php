@@ -18,6 +18,7 @@ class PeminjamanController extends Controller
     public function index(Request $request)
     {
         $query = Peminjaman::with(['user', 'alat']);
+        $query = Peminjaman::with(['user']);
 
         if ($request->user()->role === 'peminjam') {
             $query->where('user_id', $request->user()->id);
@@ -31,7 +32,7 @@ class PeminjamanController extends Controller
                 })->orWhereHas('alat', function ($alatQuery) use ($searchTerm) {
                     $alatQuery->where('nama_alat', 'like', $searchTerm);
                 });
-            });
+                })->orWhereIn('alat_id', Alat::where('nama_alat', 'like', $searchTerm)->pluck('id'));
         }
 
         if ($request->has('filter.status')) {
@@ -57,6 +58,15 @@ class PeminjamanController extends Controller
 
         $peminjamans = $query->paginate(10)->withQueryString();
 
+        // Load manual data alat untuk resource
+        $alatIds = $peminjamans->pluck('alat_id')->unique();
+        $alats = Alat::whereIn('id', $alatIds)->get()->keyBy('id');
+        
+        $peminjamans->getCollection()->transform(function ($peminjaman) use ($alats) {
+            $peminjaman->setRelation('alat', $alats[$peminjaman->alat_id] ?? null);
+            return $peminjaman;
+        });
+
         return PeminjamanResource::collection($peminjamans);
     }
 
@@ -74,12 +84,6 @@ class PeminjamanController extends Controller
         ]);
 
         $alat = Alat::findOrFail($validated['alat_id']);
-
-        if ($alat->status !== 'tersedia') {
-            throw ValidationException::withMessages([
-                'alat_id' => 'Alat tidak tersedia untuk dipinjam saat ini.',
-            ]);
-        }
 
         if ($alat->stok < $validated['jumlah']) {
             throw ValidationException::withMessages([
@@ -114,6 +118,10 @@ class PeminjamanController extends Controller
         }
 
         return new PeminjamanResource($peminjaman->load(['user', 'alat', 'petugas']));
+        $peminjaman->load(['user', 'petugas']);
+        $peminjaman->setRelation('alat', Alat::find($peminjaman->alat_id));
+
+        return new PeminjamanResource($peminjaman);
     }
 
     /**
@@ -126,6 +134,7 @@ class PeminjamanController extends Controller
         }
 
         $alat = $peminjaman->alat;
+        $alat = Alat::findOrFail($peminjaman->alat_id);
 
         if ($alat->stok < $peminjaman->jumlah) {
             $peminjaman->update([
@@ -180,6 +189,8 @@ class PeminjamanController extends Controller
 
         DB::transaction(function () use ($peminjaman) {
             $peminjaman->alat->increment('stok', $peminjaman->jumlah);
+            $alat = Alat::findOrFail($peminjaman->alat_id);
+            $alat->increment('stok', $peminjaman->jumlah);
             $peminjaman->update([
                 'status' => 'dikembalikan',
                 'tanggal_kembali_aktual' => now(),

@@ -10,7 +10,7 @@ class Peminjaman extends Model
     use HasFactory;
 
     protected $table = 'peminjaman';
-    protected $fillable = ['user_id', 'petugas_approval_id', 'tanggal_pinjam', 'tanggal_kembali_rencana', 'tanggal_kembali_actual', 'status', 'keperluan'];
+    protected $fillable = ['user_id', 'alat_id', 'jumlah', 'petugas_approval_id', 'tanggal_pinjam', 'tanggal_kembali_rencana', 'tanggal_kembali_actual', 'status', 'keperluan', 'keterangan', 'catatan_petugas'];
 
     public function user()
     {
@@ -20,6 +20,11 @@ class Peminjaman extends Model
     public function petugasApproval()
     {
         return $this->belongsTo(User::class, 'petugas_approval_id');
+    }
+
+    public function alat()
+    {
+        return $this->belongsTo(Alat::class);
     }
 
     public function detailPeminjaman()

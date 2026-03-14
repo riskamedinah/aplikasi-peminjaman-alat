@@ -28,10 +28,6 @@ class AlatController extends Controller
             $query->where('kondisi', $request->input('filter.kondisi'));
         }
 
-        if ($request->has('filter.status')) {
-            $query->where('status', $request->input('filter.status'));
-        }
-
         if ($request->has('sort')) {
             $sortField = $request->input('sort');
             $sortOrder = $request->input('order', 'asc');
@@ -51,7 +47,7 @@ class AlatController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * POST /api/alat
      */
     public function store(Request $request)
     {
@@ -61,7 +57,6 @@ class AlatController extends Controller
             'deskripsi'   => 'nullable|string',
             'stok'        => 'required|integer|min:0',
             'kondisi'     => 'required|string',
-            'status'      => 'required|string',
             'gambar'      => 'nullable|string',
         ]);
 
@@ -74,7 +69,7 @@ class AlatController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * GET /api/alat/{id}
      */
     public function show(Alat $alat)
     {
@@ -82,7 +77,7 @@ class AlatController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * PUT /api/alat/{id}
      */
     public function update(Request $request, Alat $alat)
     {
@@ -92,7 +87,6 @@ class AlatController extends Controller
             'deskripsi'   => 'nullable|string',
             'stok'        => 'sometimes|integer|min:0',
             'kondisi'     => 'sometimes|string',
-            'status'      => 'sometimes|string',
             'gambar'      => 'nullable|string',
         ]);
 
@@ -103,7 +97,7 @@ class AlatController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * DELETE /api/alat/{id}
      */
     public function destroy(Alat $alat)
     {

@@ -12,7 +12,6 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     /**
-     * Display a listing of the resource.
      * GET /api/users
      */
     public function index(Request $request)
@@ -50,7 +49,6 @@ class UserController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
      * POST /api/users
      */
     public function store(Request $request)
@@ -73,7 +71,6 @@ class UserController extends Controller
     }
 
     /**
-     * Display the specified resource.
      * GET /api/users/{id}
      */
     public function show(User $user)
@@ -82,7 +79,6 @@ class UserController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
      * PUT /api/users/{id}
      */
     public function update(Request $request, User $user)
@@ -107,7 +103,6 @@ class UserController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
      * DELETE /api/users/{id}
      */
     public function destroy(Request $request, User $user)

@@ -12,7 +12,6 @@ class KategoriController extends Controller
 {
     /**
      * GET /api/kategori
-     * Menampilkan daftar semua kategori dengan paginasi, filter, dan search.
      */
     public function index(Request $request)
     {
@@ -34,7 +33,6 @@ class KategoriController extends Controller
 
     /**
      * POST /api/kategori
-     * Menambah kategori baru
      */
     public function store(KategoriRequest $request)
     {
@@ -48,7 +46,6 @@ class KategoriController extends Controller
 
     /**
      * GET /api/kategori/{id}
-     * Menampilkan detail kategori.
      */
     public function show(Kategori $kategori)
     {
@@ -57,7 +54,6 @@ class KategoriController extends Controller
 
     /**
      * PUT /api/kategori/{id}
-     * Mengupdate data kategori
      */
     public function update(KategoriRequest $request, Kategori $kategori)
     {
@@ -69,7 +65,6 @@ class KategoriController extends Controller
 
     /**
      * DELETE /api/kategori/{id}
-     * Menghapus kategori
      */
     public function destroy(Kategori $kategori)
     {
