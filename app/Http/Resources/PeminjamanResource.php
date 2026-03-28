@@ -7,27 +7,28 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class PeminjamanResource extends JsonResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(Request $request): array
     {
         return [
             'id' => $this->id,
-            'jumlah' => $this->jumlah,
+            'user' => [
+                'id' => $this->user?->id,
+                'name' => $this->user?->name,
+                'email' => $this->user?->email,
+            ],
+            'petugas_approval' => $this->petugasApproval ? [
+                'id' => $this->petugasApproval->id,
+                'name' => $this->petugasApproval->name,
+            ] : null,
             'tanggal_pinjam' => $this->tanggal_pinjam,
             'tanggal_kembali_rencana' => $this->tanggal_kembali_rencana,
-            'tanggal_kembali_aktual' => $this->tanggal_kembali_aktual,
+            'tanggal_kembali_actual' => $this->tanggal_kembali_actual,
             'status' => $this->status,
-            'keterangan' => $this->keterangan,
+            'keperluan' => $this->keperluan,
             'catatan_petugas' => $this->catatan_petugas,
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
-            'user' => new UserResource($this->whenLoaded('user')),
-            'alat' => new AlatResource($this->whenLoaded('alat')),
-            'petugas' => new UserResource($this->whenLoaded('petugas')),
+            'details' => DetailPeminjamanResource::collection($this->whenLoaded('detailPeminjaman')),
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
         ];
     }
 }

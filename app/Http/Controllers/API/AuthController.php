@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\LogAktivitas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +30,13 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth-token', [$user->role])->plainTextToken;
 
+        LogAktivitas::create([
+            'user_id' => $user->id,
+            'peminjaman_id' => null,
+            'aksi' => 'login',
+            'keterangan' => 'User ' . $user->name . ' login ke sistem',
+        ]);
+
         return response()->json([
             'message' => 'Login berhasil',
             'user'    => $user,
@@ -39,6 +47,15 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        $user = $request->user();
+
+        LogAktivitas::create([
+            'user_id' => $user->id,
+            'peminjaman_id' => null,
+            'aksi' => 'logout',
+            'keterangan' => 'User ' . $user->name . ' logout dari sistem',
+        ]);
+
         $request->user()->currentAccessToken()->delete();
 
         return response()->json([

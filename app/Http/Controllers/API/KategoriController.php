@@ -14,22 +14,31 @@ class KategoriController extends Controller
      * GET /api/kategori
      */
     public function index(Request $request)
-    {
-        $query = Kategori::query();
+{
+    $query = Kategori::query();
 
-        if ($request->filled('search')) {
-            $query->where('nama_kategori', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->has('filter.nama_kategori')) {
-            $query->where('nama_kategori', 'like', '%' . $request->input('filter.nama_kategori') . '%');
-        }
-
-        $query->latest();
-
-        $kategoris = $query->paginate(10)->withQueryString();
-        return KategoriResource::collection($kategoris);
+    if ($request->filled('search')) {
+        $query->where('nama_kategori', 'like', '%' . $request->search . '%');
     }
+
+    if ($request->has('filter.nama_kategori')) {
+        $query->where('nama_kategori', 'like', '%' . $request->input('filter.nama_kategori') . '%');
+    }
+
+    $sortBy = $request->input('sort_by', 'created_at');
+    $sortOrder = $request->input('sort_order', 'desc');
+    
+    if (in_array($sortBy, ['nama_kategori', 'created_at'])) {
+        $query->orderBy($sortBy, $sortOrder === 'asc' ? 'asc' : 'desc');
+    } else {
+        $query->latest();
+    }
+
+    $limit = $request->input('limit', 10);
+    $kategoris = $query->paginate($limit)->withQueryString();
+    
+    return KategoriResource::collection($kategoris);
+}
 
     /**
      * POST /api/kategori

@@ -3,36 +3,78 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Peminjaman;
-use App\Models\Alat;
 use App\Http\Resources\PeminjamanResource;
+use App\Models\Peminjaman;
+use App\Models\DetailPeminjaman;
+use App\Models\Alat;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class PeminjamanController extends Controller
 {
-    /**
-     * GET /api/peminjaman
-     */
-    public function index(Request $request)
+    public function store(Request $request)
     {
-        $query = Peminjaman::with(['user', 'alat']);
-        $query = Peminjaman::with(['user']);
+        $validated = $request->validate([
+            'tanggal_pinjam' => 'required|date|after_or_equal:today',
+            'tanggal_kembali_rencana' => 'required|date|after:tanggal_pinjam',
+            'keperluan' => 'nullable|string',
+            'details' => 'required|array|min:1',
+            'details.*.alat_id' => 'required|exists:alat,id',
+            'details.*.jumlah' => 'required|integer|min:1',
+        ]);
 
-        if ($request->user()->role === 'peminjam') {
-            $query->where('user_id', $request->user()->id);
+        DB::beginTransaction();
+        
+        try {
+            foreach ($validated['details'] as $detail) {
+                $alat = Alat::findOrFail($detail['alat_id']);
+                if ($alat->stok_total < $detail['jumlah']) {
+                    return response()->json([
+                        'message' => "Stok alat {$alat->nama_alat} tidak mencukupi."
+                    ], 422);
+                }
+            }
+
+            $peminjaman = Peminjaman::create([
+                'user_id' => $request->user()->id,
+                'tanggal_pinjam' => $validated['tanggal_pinjam'],
+                'tanggal_kembali_rencana' => $validated['tanggal_kembali_rencana'],
+                'keperluan' => $validated['keperluan'],
+                'status' => 'pending',
+            ]);
+
+            foreach ($validated['details'] as $detail) {
+                DetailPeminjaman::create([
+                    'peminjaman_id' => $peminjaman->id,
+                    'alat_id' => $detail['alat_id'],
+                    'jumlah' => $detail['jumlah'],
+                ]);
+            }
+
+            DB::commit();
+
+            return (new PeminjamanResource($peminjaman->load(['user', 'detailPeminjaman.alat'])))
+                ->additional(['message' => 'Peminjaman berhasil diajukan'])
+                ->response()
+                ->setStatusCode(201);
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
+    }
+
+    public function peminjamanSaya(Request $request)
+    {
+        $query = Peminjaman::with(['user', 'petugasApproval', 'detailPeminjaman.alat'])
+            ->where('user_id', $request->user()->id);
 
         if ($request->filled('search')) {
             $searchTerm = '%' . $request->search . '%';
-            $query->where(function ($q) use ($searchTerm) {
-                $q->whereHas('user', function ($userQuery) use ($searchTerm) {
-                    $userQuery->where('name', 'like', $searchTerm);
-                })->orWhereHas('alat', function ($alatQuery) use ($searchTerm) {
-                    $alatQuery->where('nama_alat', 'like', $searchTerm);
-                });
-                })->orWhereIn('alat_id', Alat::where('nama_alat', 'like', $searchTerm)->pluck('id'));
+            $query->whereHas('detailPeminjaman.alat', function ($q) use ($searchTerm) {
+                $q->where('nama_alat', 'like', $searchTerm);
+            });
         }
 
         if ($request->has('filter.status')) {
@@ -43,161 +85,69 @@ class PeminjamanController extends Controller
             $query->whereDate('tanggal_pinjam', $request->input('filter.tanggal_pinjam'));
         }
 
-        if ($request->has('sort')) {
-            $sortField = $request->input('sort');
-            $sortOrder = $request->input('order', 'asc');
-            
-            $allowedSorts = ['tanggal_pinjam', 'tanggal_kembali_rencana'];
-            
-            if (in_array($sortField, $allowedSorts)) {
-                $query->orderBy($sortField, $sortOrder);
-            }
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        
+        $allowedSorts = ['tanggal_pinjam', 'tanggal_kembali_rencana', 'created_at'];
+        
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder === 'asc' ? 'asc' : 'desc');
         } else {
             $query->latest();
         }
 
-        $peminjamans = $query->paginate(10)->withQueryString();
-
-        // Load manual data alat untuk resource
-        $alatIds = $peminjamans->pluck('alat_id')->unique();
-        $alats = Alat::whereIn('id', $alatIds)->get()->keyBy('id');
+        $limit = $request->input('limit', 10);
+        $peminjamans = $query->paginate($limit)->withQueryString();
         
-        $peminjamans->getCollection()->transform(function ($peminjaman) use ($alats) {
-            $peminjaman->setRelation('alat', $alats[$peminjaman->alat_id] ?? null);
-            return $peminjaman;
-        });
-
         return PeminjamanResource::collection($peminjamans);
     }
 
-    /**
-     * POST /api/peminjaman
-     */
-    public function store(Request $request)
+    public function showPeminjamanSaya(Peminjaman $peminjaman, Request $request)
     {
-        $validated = $request->validate([
-            'alat_id' => 'required|exists:alats,id',
-            'jumlah' => 'required|integer|min:1',
-            'tanggal_pinjam' => 'required|date|after_or_equal:today',
-            'tanggal_kembali_rencana' => 'required|date|after:tanggal_pinjam',
-            'keterangan' => 'nullable|string',
-        ]);
-
-        $alat = Alat::findOrFail($validated['alat_id']);
-
-        if ($alat->stok < $validated['jumlah']) {
-            throw ValidationException::withMessages([
-                'jumlah' => "Stok alat tidak mencukupi. Stok tersedia: {$alat->stok}.",
-            ]);
+        if ($peminjaman->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $peminjaman = Peminjaman::create([
-            'user_id' => $request->user()->id,
-            'alat_id' => $validated['alat_id'],
-            'jumlah' => $validated['jumlah'],
-            'tanggal_pinjam' => $validated['tanggal_pinjam'],
-            'tanggal_kembali_rencana' => $validated['tanggal_kembali_rencana'],
-            'keterangan' => $validated['keterangan'],
-            'status' => 'pending',
-        ]);
-
-        return (new PeminjamanResource($peminjaman))
-            ->additional(['message' => 'Permintaan peminjaman berhasil dibuat.'])
-            ->response()
-            ->setStatusCode(201);
+        return new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat']));
     }
 
-    /**
-     * GET /api/peminjaman/{id}
-     */
-    public function show(Request $request, Peminjaman $peminjaman)
+    public function ajukanKembali(Peminjaman $peminjaman, Request $request)
     {
-        $user = $request->user();
-        if ($user->role === 'peminjam' && $user->id !== $peminjaman->user_id) {
-            return response()->json(['message' => 'Anda tidak diizinkan melihat data ini.'], 403);
+        if ($peminjaman->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        return new PeminjamanResource($peminjaman->load(['user', 'alat', 'petugas']));
-        $peminjaman->load(['user', 'petugas']);
-        $peminjaman->setRelation('alat', Alat::find($peminjaman->alat_id));
-
-        return new PeminjamanResource($peminjaman);
-    }
-
-    /**
-     * POST /peminjaman/{id}/approve
-     */
-    public function approve(Request $request, Peminjaman $peminjaman)
-    {
-        if ($peminjaman->status !== 'pending') {
-            return response()->json(['message' => 'Hanya peminjaman dengan status pending yang bisa disetujui.'], 422);
+        if ($peminjaman->status !== 'ditolak') {
+            return response()->json([
+                'message' => 'Hanya peminjaman yang ditolak yang dapat diajukan kembali.'
+            ], 422);
         }
 
-        $alat = $peminjaman->alat;
-        $alat = Alat::findOrFail($peminjaman->alat_id);
+        DB::beginTransaction();
+        
+        try {
+            foreach ($peminjaman->detailPeminjaman as $detail) {
+                $alat = Alat::findOrFail($detail->alat_id);
+                if ($alat->stok_total < $detail->jumlah) {
+                    return response()->json([
+                        'message' => "Stok alat {$alat->nama_alat} tidak mencukupi."
+                    ], 422);
+                }
+            }
 
-        if ($alat->stok < $peminjaman->jumlah) {
             $peminjaman->update([
-                'status' => 'ditolak',
-                'petugas_id' => $request->user()->id,
-                'catatan_petugas' => 'Stok tidak mencukupi saat akan disetujui.',
+                'status' => 'pending',
+                'catatan_petugas' => null,
             ]);
-            return response()->json(['message' => 'Peminjaman ditolak karena stok tidak mencukupi.'], 409);
+
+            DB::commit();
+
+            return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
+                ->additional(['message' => 'Peminjaman berhasil diajukan kembali']);
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
-
-        DB::transaction(function () use ($peminjaman, $alat, $request) {
-            $alat->decrement('stok', $peminjaman->jumlah);
-            $peminjaman->update([
-                'status' => 'disetujui',
-                'petugas_id' => $request->user()->id,
-            ]);
-        });
-
-        return (new PeminjamanResource($peminjaman))
-            ->additional(['message' => 'Peminjaman berhasil disetujui.']);
-    }
-
-    /**
-     * POST /peminjaman/{id}/reject
-     */
-    public function reject(Request $request, Peminjaman $peminjaman)
-    {
-        $request->validate(['catatan_petugas' => 'nullable|string|max:255']);
-
-        if ($peminjaman->status !== 'pending') {
-            return response()->json(['message' => 'Hanya peminjaman dengan status pending yang bisa ditolak.'], 422);
-        }
-
-        $peminjaman->update([
-            'status' => 'ditolak',
-            'petugas_id' => $request->user()->id,
-            'catatan_petugas' => $request->input('catatan_petugas'),
-        ]);
-
-        return (new PeminjamanResource($peminjaman))
-            ->additional(['message' => 'Peminjaman berhasil ditolak.']);
-    }
-
-    /**
-     * POST /peminjaman/{id}/kembalikan
-     */
-    public function kembalikan(Request $request, Peminjaman $peminjaman)
-    {
-        if ($peminjaman->status !== 'disetujui') {
-            return response()->json(['message' => 'Hanya peminjaman yang disetujui yang bisa dikembalikan.'], 422);
-        }
-
-        DB::transaction(function () use ($peminjaman) {
-            $peminjaman->alat->increment('stok', $peminjaman->jumlah);
-            $alat = Alat::findOrFail($peminjaman->alat_id);
-            $alat->increment('stok', $peminjaman->jumlah);
-            $peminjaman->update([
-                'status' => 'dikembalikan',
-                'tanggal_kembali_aktual' => now(),
-            ]);
-        });
-
-        return (new PeminjamanResource($peminjaman))
-            ->additional(['message' => 'Alat berhasil dikembalikan.']);
     }
 }

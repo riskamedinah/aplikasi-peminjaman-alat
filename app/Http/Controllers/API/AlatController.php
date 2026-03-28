@@ -3,18 +3,16 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Alat;
+use App\Http\Requests\AlatRequest;
 use App\Http\Resources\AlatResource;
+use App\Models\Alat;
 use Illuminate\Http\Request;
 
 class AlatController extends Controller
 {
-    /**
-     * GET /api/alat
-     */
     public function index(Request $request)
     {
-        $query = Alat::query();
+        $query = Alat::with('kategori');
 
         if ($request->filled('search')) {
             $query->where('nama_alat', 'like', '%' . $request->search . '%');
@@ -28,39 +26,26 @@ class AlatController extends Controller
             $query->where('kondisi', $request->input('filter.kondisi'));
         }
 
-        if ($request->has('sort')) {
-            $sortField = $request->input('sort');
-            $sortOrder = $request->input('order', 'asc');
-            
-            $allowedSorts = ['nama_alat', 'stok', 'created_at'];
-            
-            if (in_array($sortField, $allowedSorts)) {
-                $query->orderBy($sortField, $sortOrder);
-            }
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        
+        $allowedSorts = ['nama_alat', 'stok_total', 'created_at'];
+        
+        if (in_array($sortBy, $allowedSorts)) {
+            $query->orderBy($sortBy, $sortOrder === 'asc' ? 'asc' : 'desc');
         } else {
             $query->latest();
         }
 
-        $alats = $query->paginate(10)->withQueryString();
+        $limit = $request->input('limit', 10);
+        $alats = $query->paginate($limit)->withQueryString();
         
         return AlatResource::collection($alats);
     }
 
-    /**
-     * POST /api/alat
-     */
-    public function store(Request $request)
+    public function store(AlatRequest $request)
     {
-        $validated = $request->validate([
-            'kategori_id' => 'required|exists:kategoris,id',
-            'nama_alat'   => 'required|string|max:255',
-            'deskripsi'   => 'nullable|string',
-            'stok'        => 'required|integer|min:0',
-            'kondisi'     => 'required|string',
-            'gambar'      => 'nullable|string',
-        ]);
-
-        $alat = Alat::create($validated);
+        $alat = Alat::create($request->validated());
 
         return (new AlatResource($alat))
             ->additional(['message' => 'Alat berhasil ditambahkan'])
@@ -68,40 +53,22 @@ class AlatController extends Controller
             ->setStatusCode(201);
     }
 
-    /**
-     * GET /api/alat/{id}
-     */
     public function show(Alat $alat)
     {
-        return new AlatResource($alat);
+        return new AlatResource($alat->load('kategori'));
     }
 
-    /**
-     * PUT /api/alat/{id}
-     */
-    public function update(Request $request, Alat $alat)
+    public function update(AlatRequest $request, Alat $alat)
     {
-        $validated = $request->validate([
-            'kategori_id' => 'sometimes|exists:kategoris,id',
-            'nama_alat'   => 'sometimes|string|max:255',
-            'deskripsi'   => 'nullable|string',
-            'stok'        => 'sometimes|integer|min:0',
-            'kondisi'     => 'sometimes|string',
-            'gambar'      => 'nullable|string',
-        ]);
-
-        $alat->update($validated);
+        $alat->update($request->validated());
 
         return (new AlatResource($alat))
             ->additional(['message' => 'Alat berhasil diperbarui']);
     }
 
-    /**
-     * DELETE /api/alat/{id}
-     */
     public function destroy(Alat $alat)
     {
-        if ($alat->peminjaman()->exists()) {
+        if ($alat->detailPeminjaman()->exists()) {
             return response()->json([
                 'message' => 'Alat tidak dapat dihapus karena memiliki riwayat peminjaman.'
             ], 409);

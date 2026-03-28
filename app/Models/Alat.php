@@ -10,11 +10,20 @@ class Alat extends Model
     use HasFactory;
 
     protected $table = 'alat';
-    protected $fillable = ['kategori_id', 'kode_alat', 'nama_alat', 'deskripsi', 'gambar', 'stok_total', 'kondisi'];
+    
+    protected $fillable = [
+        'kategori_id',
+        'kode_alat',
+        'nama_alat',
+        'deskripsi',
+        'gambar',
+        'stok_total',
+        'kondisi'
+    ];
 
     public function kategori()
     {
-        return $this->belongsTo(Kategori::class);
+        return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
     public function detailPeminjaman()
