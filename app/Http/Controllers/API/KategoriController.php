@@ -10,9 +10,6 @@ use Illuminate\Http\Request;
 
 class KategoriController extends Controller
 {
-    /**
-     * GET /api/kategori
-     */
     public function index(Request $request)
 {
     $query = Kategori::query();
@@ -40,9 +37,6 @@ class KategoriController extends Controller
     return KategoriResource::collection($kategoris);
 }
 
-    /**
-     * POST /api/kategori
-     */
     public function store(KategoriRequest $request)
     {
         $kategori = Kategori::create($request->validated());
@@ -53,17 +47,11 @@ class KategoriController extends Controller
             ->setStatusCode(201);
     }
 
-    /**
-     * GET /api/kategori/{id}
-     */
     public function show(Kategori $kategori)
     {
         return new KategoriResource($kategori);
     }
 
-    /**
-     * PUT /api/kategori/{id}
-     */
     public function update(KategoriRequest $request, Kategori $kategori)
     {
         $kategori->update($request->validated());
@@ -72,9 +60,6 @@ class KategoriController extends Controller
             ->additional(['message' => 'Kategori berhasil diperbarui']);
     }
 
-    /**
-     * DELETE /api/kategori/{id}
-     */
     public function destroy(Kategori $kategori)
     {
         if ($kategori->alats()->exists()) {

@@ -11,9 +11,6 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    /**
-     * GET /api/users
-     */
 public function index(Request $request)
 {
     $query = User::query();
@@ -47,9 +44,6 @@ public function index(Request $request)
     return UserResource::collection($users);
 }
 
-    /**
-     * POST /api/users
-     */
     public function store(UserRequest $request)
 {
     $validated = $request->validated();
@@ -63,17 +57,11 @@ public function index(Request $request)
         ->setStatusCode(201);
 }
 
-    /**
-     * GET /api/users/{id}
-     */
     public function show(User $user)
     {
         return new UserResource($user);
     }
 
-    /**
-     * PUT /api/users/{id}
-     */
    public function update(UserRequest $request, User $user)
 {
     $validated = $request->validated();
@@ -90,9 +78,6 @@ public function index(Request $request)
         ->additional(['message' => 'Pengguna berhasil diperbarui']);
 }
 
-    /**
-     * DELETE /api/users/{id}
-     */
     public function destroy(Request $request, User $user)
 {
     if ($request->user()->id === $user->id) {
