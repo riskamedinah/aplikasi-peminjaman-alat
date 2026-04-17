@@ -30,4 +30,8 @@ class Alat extends Model
     {
         return $this->hasMany(DetailPeminjaman::class);
     }
+
+    public function peminjaman() {
+    return $this->hasMany(Peminjaman::class);
+}
 }

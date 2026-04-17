@@ -7,9 +7,13 @@ use App\Http\Resources\PeminjamanResource;
 use App\Models\Peminjaman;
 use App\Models\DetailPeminjaman;
 use App\Models\Alat;
+use App\Models\LogAktivitas;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\PeminjamanExport;
 
 class PeminjamanController extends Controller
 {
@@ -137,7 +141,6 @@ class PeminjamanController extends Controller
 
             $peminjaman->update([
                 'status' => 'pending',
-                'catatan_petugas' => null,
             ]);
 
             DB::commit();
@@ -149,5 +152,58 @@ class PeminjamanController extends Controller
             DB::rollBack();
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
+    }
+
+      /**
+     * EXPORT PEMINJAMAN (untuk admin)
+     */
+    public function export(Request $request)
+    {
+        $query = Peminjaman::with(['user', 'petugasApproval', 'detailPeminjaman.alat']);
+
+        // SEARCH
+        if ($request->filled('search')) {
+            $searchTerm = '%' . $request->search . '%';
+            $query->where(function ($q) use ($searchTerm) {
+                $q->whereHas('user', function ($q2) use ($searchTerm) {
+                    $q2->where('name', 'like', $searchTerm)
+                      ->orWhere('email', 'like', $searchTerm);
+                })->orWhereHas('detailPeminjaman.alat', function ($q2) use ($searchTerm) {
+                    $q2->where('nama_alat', 'like', $searchTerm);
+                });
+            });
+        }
+
+        // FILTER STATUS
+        if ($request->has('filter.status')) {
+            $query->where('status', $request->input('filter.status'));
+        }
+
+        // FILTER TANGGAL PINJAM
+        if ($request->has('filter.tanggal_pinjam_from') && $request->has('filter.tanggal_pinjam_to')) {
+            $query->whereBetween('tanggal_pinjam', [
+                $request->input('filter.tanggal_pinjam_from'),
+                $request->input('filter.tanggal_pinjam_to')
+            ]);
+        }
+
+        $peminjamans = $query->orderBy('created_at', 'desc')->get();
+        
+        $format = $request->input('format', 'excel');
+        
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('reports.peminjaman', [
+                'peminjamans' => $peminjamans,
+                'title' => 'Laporan Peminjaman - Admin',
+                'user' => $request->user(),
+                'tanggal_from' => $request->input('filter.tanggal_pinjam_from'),
+                'tanggal_to' => $request->input('filter.tanggal_pinjam_to'),
+                'exported_at' => now()
+            ]);
+            
+            return $pdf->download('laporan_peminjaman_' . now()->format('Ymd_His') . '.pdf');
+        }
+        
+        return Excel::download(new PeminjamanExport($peminjamans), 'laporan_peminjaman_' . now()->format('Ymd_His') . '.xlsx');
     }
 }

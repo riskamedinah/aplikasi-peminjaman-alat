@@ -42,4 +42,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(LogAktivitas::class, 'user_id');
     }
+
+    /**
+     * Check if user has a specific role
+     */
+    public function hasRole($role)
+    {
+        if (is_array($role)) {
+            return in_array($this->role, $role);
+        }
+        return $this->role === $role;
+    }
 }

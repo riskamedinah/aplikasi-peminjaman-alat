@@ -5,8 +5,10 @@ namespace App\Exports;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class PeminjamanExport implements FromCollection, WithHeadings, WithMapping
+class PeminjamanExport implements FromCollection, WithHeadings, WithMapping, WithStyles
 {
     protected $peminjamans;
 
@@ -25,36 +27,47 @@ class PeminjamanExport implements FromCollection, WithHeadings, WithMapping
         return [
             'ID',
             'Peminjam',
-            'Email Peminjam',
             'Petugas Approval',
             'Tanggal Pinjam',
             'Tanggal Kembali Rencana',
-            'Tanggal Kembali Aktual',
+            'Tanggal Kembali Actual',
             'Status',
             'Keperluan',
-            'Catatan Petugas',
-            'Dibuat Pada',
+            'Alat yang Dipinjam',
+            'Total Jumlah',
+            'Dibuat Pada'
         ];
     }
 
     public function map($peminjaman): array
     {
-        $alatDetails = $peminjaman->detailPeminjaman->map(function ($detail) {
-            return $detail->alat->nama_alat . ' (' . $detail->jumlah . ')';
-        })->implode(', ');
-
+        $alatList = [];
+        $totalJumlah = 0;
+        
+        foreach ($peminjaman->detailPeminjaman as $detail) {
+            $alatList[] = $detail->alat->nama_alat . ' (' . $detail->jumlah . ')';
+            $totalJumlah += $detail->jumlah;
+        }
+        
         return [
             $peminjaman->id,
-            $peminjaman->user->name ?? '-',
-            $peminjaman->user->email ?? '-',
-            $peminjaman->petugasApproval->name ?? '-',
+            $peminjaman->user?->name ?? '-',
+            $peminjaman->petugasApproval?->name ?? '-',
             $peminjaman->tanggal_pinjam,
             $peminjaman->tanggal_kembali_rencana,
             $peminjaman->tanggal_kembali_actual ?? '-',
             $peminjaman->status,
             $peminjaman->keperluan ?? '-',
-            $peminjaman->catatan_petugas ?? '-',
+            implode(', ', $alatList),
+            $totalJumlah,
             $peminjaman->created_at,
+        ];
+    }
+
+    public function styles(Worksheet $sheet)
+    {
+        return [
+            1 => ['font' => ['bold' => true]],
         ];
     }
 }

@@ -96,6 +96,15 @@ class DatabaseSeeder extends Seeder
             'keperluan' => 'Presentasi',
         ]);
 
+        $peminjaman3 = Peminjaman::factory()->create([
+            'user_id' => $peminjam1->id, // Bisa pakai peminjam1 lagi atau buat baru
+            'petugas_approval_id' => $petugas->id,
+            'tanggal_pinjam' => now()->subDays(2),
+            'tanggal_kembali_rencana' => now()->addDays(5),
+            'status' => 'dipinjam', // Status sedang dipinjam
+            'keperluan' => 'Proyek Tugas Akhir',
+        ]);
+
         DetailPeminjaman::factory()->create([
             'peminjaman_id' => $peminjaman1->id,
             'alat_id' => $alat1->id,
@@ -112,6 +121,13 @@ class DatabaseSeeder extends Seeder
             'peminjaman_id' => $peminjaman2->id,
             'alat_id' => $alat2->id,
             'jumlah' => 2,
+        ]);
+
+           // Detail alat yang dipinjam untuk peminjaman ketiga
+        DetailPeminjaman::factory()->create([
+            'peminjaman_id' => $peminjaman3->id,
+            'alat_id' => $alat3->id, // Bor Listrik
+            'jumlah' => 1,
         ]);
 
         LogAktivitas::factory()->create([
@@ -133,6 +149,14 @@ class DatabaseSeeder extends Seeder
             'peminjaman_id' => $peminjaman2->id,
             'aksi' => 'insert',
             'keterangan' => 'Mengajukan peminjaman',
+        ]);
+
+          // Log Aktivitas untuk peminjaman ketiga
+        LogAktivitas::factory()->create([
+            'user_id' => $peminjam1->id,
+            'peminjaman_id' => $peminjaman3->id,
+            'aksi' => 'insert',
+            'keterangan' => 'Mengajukan peminjaman untuk TA',
         ]);
     }
 }
