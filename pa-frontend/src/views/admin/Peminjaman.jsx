@@ -264,26 +264,82 @@ const EditModal = ({ item, onClose, onSaved }) => {
     setErrors(e => ({ ...e, [k]: null, general: null }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrors({});
+  // State untuk edit alat
+const [details, setDetails] = useState(() => {
+  if (!item?.details) return [];
+  return item.details.map(d => ({
+    alat_id: d.alat?.id,
+    jumlah: d.jumlah,
+    alat: d.alat
+  }));
+});
+const [selectedAlat, setSelectedAlat] = useState('');
+const [selectedJumlah, setSelectedJumlah] = useState('1');
+const [alats, setAlats] = useState([]);
+
+// Ambil data alat dari API
+useEffect(() => {
+  const fetchAlats = async () => {
     try {
-      await api.put(`/admin/peminjaman/${item.id}`, {
-        ...form,
-        details: item.details?.map(d => ({ alat_id: d.alat?.id, jumlah: d.jumlah })),
-      });
-      onSaved('Peminjaman berhasil diperbarui');
+      const res = await api.get('/alat', { params: { limit: 100 } });
+      setAlats(res.data.data ?? []);
     } catch (err) {
-      if (err.response?.status === 422 || err.response?.status === 400) {
-        setErrors(err.response.data.errors ?? {});
-      } else {
-        setErrors({ general: err.response?.data?.message ?? 'Terjadi kesalahan server.' });
-      }
-    } finally {
-      setLoading(false);
+      console.error('Gagal ambil data alat', err);
     }
   };
+  fetchAlats();
+}, []);
+
+// Fungsi tambah dan hapus alat
+const addDetail = () => {
+  if (!selectedAlat || !selectedJumlah) {
+    alert('Pilih alat dan jumlah terlebih dahulu');
+    return;
+  }
+  const alatObj = alats.find(a => a.id === parseInt(selectedAlat));
+  if (!alatObj) return;
+  
+  if (details.some(d => d.alat_id === parseInt(selectedAlat))) {
+    alert('Alat sudah ditambahkan');
+    return;
+  }
+  
+  setDetails([...details, {
+    alat_id: parseInt(selectedAlat),
+    jumlah: parseInt(selectedJumlah),
+    alat: alatObj
+  }]);
+  setSelectedAlat('');
+  setSelectedJumlah('1');
+};
+
+const removeDetail = (idx) => {
+  setDetails(details.filter((_, i) => i !== idx));
+};
+
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrors({});
+  try {
+    await api.put(`/admin/peminjaman/${item.id}`, {
+      ...form,
+      details: details.map(d => ({ 
+        alat_id: d.alat_id, 
+        jumlah: d.jumlah 
+      })),
+    });
+    onSaved('Peminjaman berhasil diperbarui');
+  } catch (err) {
+    if (err.response?.status === 422 || err.response?.status === 400) {
+      setErrors(err.response.data.errors ?? {});
+    } else {
+      setErrors({ general: err.response?.data?.message ?? 'Terjadi kesalahan server.' });
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const inputBase   = 'w-full px-3 py-2.5 text-sm rounded-xl border outline-none transition-all';
   const inputNormal = `${inputBase} border-gray-200 focus:border-[#3F51B5] focus:ring-2 focus:ring-[#3F51B5]/10`;
@@ -293,7 +349,7 @@ const EditModal = ({ item, onClose, onSaved }) => {
   if (!item) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ background: '#3F51B5' }}>
@@ -341,20 +397,93 @@ const EditModal = ({ item, onClose, onSaved }) => {
               onChange={e => set('keperluan', e.target.value)} placeholder="Keperluan peminjaman..." />
             {errors.keperluan && <p className="text-xs text-red-500 mt-1">{errors.keperluan[0]}</p>}
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Alat Dipinjam</label>
-            <div className="space-y-2">
-              {item.details?.map(d => (
-                <div key={d.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">{d.alat?.nama_alat}</p>
-                    <p className="text-xs text-gray-400">{d.alat?.kode_alat}</p>
-                  </div>
-                  <span className="text-sm font-semibold" style={{ color: '#3F51B5' }}>×{d.jumlah}</span>
-                </div>
-              ))}
-            </div>
+<div>
+  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Alat Dipinjam</label>
+  
+  {/* Form Tambah Alat - HANYA jika status menunggu */}
+  {item?.status === 'menunggu' && (
+    <div className="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-200">
+      <div className="grid grid-cols-3 gap-2">
+        <select 
+          value={selectedAlat} 
+          onChange={e => setSelectedAlat(e.target.value)} 
+          className="px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#3F51B5] bg-white"
+        >
+          <option value="">Pilih Alat</option>
+          {alats?.map(a => (
+            <option 
+              key={a.id} 
+              value={a.id} 
+              disabled={details.some(d => d.alat_id === a.id)}
+            >
+              {a.nama_alat} (Stok: {a.stok_total})
+            </option>
+          ))}
+        </select>
+        <input 
+          type="number" 
+          min="1" 
+          value={selectedJumlah} 
+          onChange={e => setSelectedJumlah(e.target.value)} 
+          placeholder="Jumlah" 
+          className="px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#3F51B5]"
+        />
+        <button 
+          type="button" 
+          onClick={addDetail} 
+          className="px-3 py-2 text-sm font-medium rounded-xl text-white flex items-center justify-center gap-1.5"
+          style={{ background: '#3F51B5' }}
+        >
+          <PlusIcon /> Tambah
+        </button>
+      </div>
+    </div>
+  )}
+  
+  {/* Daftar Alat */}
+  {details.length > 0 ? (
+    <div className="space-y-2">
+      {details.map((d, idx) => (
+        <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-800">{d.alat?.nama_alat}</p>
+            <p className="text-xs text-gray-400">{d.alat?.kode_alat}</p>
           </div>
+          <div className="flex items-center gap-3">
+            {item?.status === 'menunggu' ? (
+              <>
+                <input 
+                  type="number" 
+                  min="1" 
+                  value={d.jumlah} 
+                  onChange={e => {
+                    const newDetails = [...details];
+                    newDetails[idx].jumlah = parseInt(e.target.value);
+                    setDetails(newDetails);
+                  }}
+                  className="w-20 px-2 py-1 text-sm rounded-lg border border-gray-200 text-center"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => removeDetail(idx)} 
+                  className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  ✕ Hapus
+                </button>
+              </>
+            ) : (
+              <span className="text-sm font-semibold" style={{ color: '#3F51B5' }}>×{d.jumlah}</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 text-center text-sm text-gray-500">
+      Belum ada alat. {item?.status === 'menunggu' ? 'Pilih alat di atas untuk menambahkan.' : ''}
+    </div>
+  )}
+</div>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
           <button type="button" onClick={onClose} disabled={loading}
@@ -1117,8 +1246,11 @@ function Peminjaman() {
                             </button>
                             <button
                               onClick={() => setEditItem(row)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-amber-50 text-amber-600"
-                            >
+                              disabled={row.status !== 'menunggu'}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                              ${row.status === 'menunggu' ? 'hover:bg-amber-50 text-amber-600' : 'opacity-50 cursor-not-allowed text-gray-400'}`}
+                              title={row.status !== 'menunggu' ? 'Hanya status menunggu yang bisa diedit' : 'Edit peminjaman'}
+                              >
                               <EditIcon /> Edit
                             </button>
                             <button
