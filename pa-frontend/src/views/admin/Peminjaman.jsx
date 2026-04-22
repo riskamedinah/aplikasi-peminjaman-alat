@@ -423,8 +423,14 @@ const removeDetail = (idx) => {
         <input 
           type="number" 
           min="1" 
+          max={alats.find(a => a.id === parseInt(selectedAlat))?.stok_total || 1}
           value={selectedJumlah} 
-          onChange={e => setSelectedJumlah(e.target.value)} 
+          onChange={e => {
+            let val = parseInt(e.target.value);
+            const maxStok = alats.find(a => a.id === parseInt(selectedAlat))?.stok_total || 1;
+            if (val > maxStok) val = maxStok;
+            setSelectedJumlah(val);
+          }} 
           placeholder="Jumlah" 
           className="px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#3F51B5]"
         />
@@ -455,10 +461,14 @@ const removeDetail = (idx) => {
                 <input 
                   type="number" 
                   min="1" 
-                  value={d.jumlah} 
+                  max={d.alat?.stok_total}
+                  value={d.jumlah}
                   onChange={e => {
+                    let val = parseInt(e.target.value) || 1;
+                    if (val > d.alat?.stok_total) val = d.alat?.stok_total;
+                    if (val < 1) val = 1;
                     const newDetails = [...details];
-                    newDetails[idx].jumlah = parseInt(e.target.value);
+                    newDetails[idx].jumlah = val;
                     setDetails(newDetails);
                   }}
                   className="w-20 px-2 py-1 text-sm rounded-lg border border-gray-200 text-center"
@@ -778,7 +788,21 @@ const AddPeminjamanModal = ({ users, alats, currentUser, onClose, onSaved }) => 
                     </option>
                   ))}
                 </select>
-                <input type="number" min="1" value={selectedJumlah} onChange={e => setSelectedJumlah(e.target.value)} placeholder="Jumlah" className="px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#3F51B5] focus:ring-2 focus:ring-[#3F51B5]/10" />
+               <input 
+               type="number" 
+               min="1"
+               max={alats.find(a => a.id === parseInt(selectedAlat))?.stok_total || 1}
+               value={selectedJumlah}
+               onChange={e => {
+                let val = parseInt(e.target.value);
+                const maxStok = alats.find(a => a.id === parseInt(selectedAlat))?.stok_total || 1;
+                if (val > maxStok) val = maxStok;
+                if (val < 1) val = 1;
+                setSelectedJumlah((val));
+               }}
+                placeholder="Jumlah" 
+                className="px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none focus:border-[#3F51B5]"
+               />
                 <button type="button" onClick={addDetail} className="px-3 py-2 text-sm font-medium rounded-xl text-white flex items-center justify-center gap-1.5 transition-all" style={{ background: '#3F51B5' }}>
                   <PlusIcon /> Tambah
                 </button>
