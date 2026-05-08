@@ -18,7 +18,7 @@ class PetugasPeminjamanRequest extends FormRequest
             'tanggal_pinjam' => 'required|date',
             'tanggal_kembali_rencana' => 'required|date|after_or_equal:tanggal_pinjam',
             'tanggal_kembali_actual' => 'nullable|date',
-            'status' => 'required|in:pending,dipinjam,ditolak,dikembalikan,disetujui',
+            'status' => 'required|in:menunggu,dipinjam,ditolak,dikembalikan,disetujui',
             'keperluan' => 'required|string',
             'catatan_petugas' => 'nullable|string|max:255',
             'details' => 'required|array|min:1',

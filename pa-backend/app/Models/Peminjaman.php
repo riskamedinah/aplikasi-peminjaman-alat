@@ -36,4 +36,9 @@ class Peminjaman extends Model
     {
         return $this->hasMany(LogAktivitas::class);
     }
+
+    public function notifications()
+{
+    return $this->hasMany(Notification::class);
+}
 }

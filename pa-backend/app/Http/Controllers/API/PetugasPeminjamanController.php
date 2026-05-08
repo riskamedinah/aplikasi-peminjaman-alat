@@ -6,14 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PetugasPeminjamanRequest;
 use App\Http\Resources\PeminjamanResource;
 use App\Models\Peminjaman;
+use App\Models\DetailPeminjaman;
 use App\Models\Alat;
 use App\Models\LogAktivitas;
-use App\Models\DetailPeminjaman;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\PeminjamanExport;
 
 class PetugasPeminjamanController extends Controller
 {
@@ -26,7 +24,7 @@ class PetugasPeminjamanController extends Controller
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereHas('user', function ($q2) use ($searchTerm) {
                     $q2->where('name', 'like', $searchTerm)
-                       ->orWhere('email', 'like', $searchTerm);
+                      ->orWhere('email', 'like', $searchTerm);
                 })->orWhereHas('detailPeminjaman.alat', function ($q2) use ($searchTerm) {
                     $q2->where('nama_alat', 'like', $searchTerm);
                 });
@@ -48,21 +46,10 @@ class PetugasPeminjamanController extends Controller
             ]);
         }
 
-        if ($request->has('filter.deadline')) {
-            $query->whereDate('tanggal_kembali_rencana', $request->input('filter.deadline'));
-        }
-
-        if ($request->has('filter.deadline_from') && $request->has('filter.deadline_to')) {
-            $query->whereBetween('tanggal_kembali_rencana', [
-                $request->input('filter.deadline_from'),
-                $request->input('filter.deadline_to')
-            ]);
-        }
-
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'desc');
         
-        $allowedSorts = ['tanggal_pinjam', 'tanggal_kembali_rencana', 'created_at'];
+        $allowedSorts = ['tanggal_pinjam', 'created_at'];
         
         if (in_array($sortBy, $allowedSorts)) {
             $query->orderBy($sortBy, $sortOrder === 'asc' ? 'asc' : 'desc');
@@ -81,9 +68,15 @@ class PetugasPeminjamanController extends Controller
         DB::beginTransaction();
         
         try {
+            $currentUser = $request->user();
+            
+            if (!$currentUser) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+            
             $validated = $request->validated();
             
-            // Cek stok untuk setiap alat yang akan dipinjam
+            // Cek stok
             foreach ($validated['details'] as $detail) {
                 $alat = Alat::findOrFail($detail['alat_id']);
                 if ($alat->stok_total < $detail['jumlah']) {
@@ -93,28 +86,15 @@ class PetugasPeminjamanController extends Controller
                 }
             }
             
-            // Jika status langsung disetujui/dipinjam, kurangi stok
-            $status = $validated['status'];
-            $petugasApprovalId = null;
-            
-            if ($status === 'dipinjam' || $status === 'disetujui') {
-                foreach ($validated['details'] as $detail) {
-                    $alat = Alat::findOrFail($detail['alat_id']);
-                    $alat->decrement('stok_total', $detail['jumlah']);
-                }
-                $petugasApprovalId = $request->user()->id;
-            }
-            
-            // Buat data peminjaman baru
+            // Buat peminjaman
             $peminjaman = Peminjaman::create([
                 'user_id' => $validated['user_id'],
-                'petugas_approval_id' => $petugasApprovalId,
+                'petugas_approval_id' => $validated['petugas_approval_id'] ?? null,
                 'tanggal_pinjam' => $validated['tanggal_pinjam'],
                 'tanggal_kembali_rencana' => $validated['tanggal_kembali_rencana'],
                 'tanggal_kembali_actual' => $validated['tanggal_kembali_actual'] ?? null,
-                'status' => $status,
+                'status' => $validated['status'],
                 'keperluan' => $validated['keperluan'],
-                'catatan_petugas' => $validated['catatan_petugas'] ?? null,
             ]);
             
             // Buat detail peminjaman
@@ -126,20 +106,30 @@ class PetugasPeminjamanController extends Controller
                 ]);
             }
             
-            // Catat log aktivitas
-            $aksi = $status === 'dipinjam' ? 'approve' : 'create';
-            $keterangan = $status === 'dipinjam' 
-                ? 'Petugas ' . $request->user()->name . ' membuat dan menyetujui peminjaman'
-                : 'Petugas ' . $request->user()->name . ' membuat peminjaman baru dengan status ' . $status;
+            // Update stock jika status 'dipinjam' atau 'disetujui'
+            if ($validated['status'] === 'dipinjam' || $validated['status'] === 'disetujui') {
+                foreach ($validated['details'] as $detail) {
+                    $alat = Alat::findOrFail($detail['alat_id']);
+                    $alat->stok_total -= $detail['jumlah'];
+                    $alat->save();
+                }
+            }
             
+            // Ambil nama user target
+            $targetUser = User::find($validated['user_id']);
+            $targetUserName = $targetUser ? $targetUser->name : 'Unknown';
+            
+            // LOG AKTIVITAS
             LogAktivitas::create([
-                'user_id' => $request->user()->id,
+                'user_id' => $currentUser->id,
                 'peminjaman_id' => $peminjaman->id,
-                'aksi' => $aksi,
-                'keterangan' => $keterangan,
+                'aksi' => 'create',
+                'keterangan' => 'Petugas ' . $currentUser->name . ' membuat peminjaman untuk ' . $targetUserName . ' (Status: ' . $peminjaman->status . ')',
             ]);
             
             DB::commit();
+
+            
             
             return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
                 ->additional(['message' => 'Peminjaman berhasil ditambahkan'])
@@ -157,47 +147,127 @@ class PetugasPeminjamanController extends Controller
         return new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat']));
     }
 
-    public function approve(Request $request, Peminjaman $peminjaman)
+    public function update(PetugasPeminjamanRequest $request, Peminjaman $peminjaman)
     {
-        if ($peminjaman->status !== 'pending') {
-            return response()->json([
-                'message' => 'Peminjaman hanya dapat disetujui jika status masih pending.'
-            ], 422);
-        }
-
         DB::beginTransaction();
         
         try {
-            foreach ($peminjaman->detailPeminjaman as $detail) {
-                $alat = Alat::findOrFail($detail->alat_id);
-                if ($alat->stok_total < $detail->jumlah) {
-                    return response()->json([
-                        'message' => "Stok alat {$alat->nama_alat} tidak mencukupi."
-                    ], 422);
+            $currentUser = $request->user();
+            
+            if (!$currentUser) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+            
+            $validated = $request->validated();
+            
+            $oldStatus = $peminjaman->status;
+            $newStatus = $validated['status'];
+            
+            if ($oldStatus === 'dikembalikan' && $newStatus !== 'dikembalikan') {
+                return response()->json([
+                    'message' => 'Peminjaman yang sudah dikembalikan tidak dapat diubah statusnya.'
+                ], 422);
+            }
+            
+            if ($newStatus === 'disetujui' || $newStatus === 'dipinjam') {
+                foreach ($validated['details'] as $detail) {
+                    $alat = Alat::findOrFail($detail['alat_id']);
+                    if ($alat->stok_total < $detail['jumlah']) {
+                        return response()->json([
+                            'message' => "Stok alat {$alat->nama_alat} tidak mencukupi."
+                        ], 422);
+                    }
                 }
             }
-
-            foreach ($peminjaman->detailPeminjaman as $detail) {
-                $alat = Alat::findOrFail($detail->alat_id);
-                $alat->decrement('stok_total', $detail->jumlah);
-            }
-
+            
             $peminjaman->update([
-                'status' => 'dipinjam',
-                'petugas_approval_id' => $request->user()->id,
+                'user_id' => $validated['user_id'],
+                'petugas_approval_id' => $validated['petugas_approval_id'] ?? $peminjaman->petugas_approval_id,
+                'tanggal_pinjam' => $validated['tanggal_pinjam'],
+                'tanggal_kembali_rencana' => $validated['tanggal_kembali_rencana'],
+                'tanggal_kembali_actual' => $validated['tanggal_kembali_actual'] ?? $peminjaman->tanggal_kembali_actual,
+                'status' => $validated['status'],
+                'keperluan' => $validated['keperluan'],
             ]);
-
+            
+            // Handle stock update saat status berubah
+            if ($oldStatus !== $newStatus) {
+                $isOldStatusPinjam = ($oldStatus === 'dipinjam' || $oldStatus === 'disetujui');
+                $isNewStatusPinjam = ($newStatus === 'dipinjam' || $newStatus === 'disetujui');
+                
+                // Jika status berubah MENJADI 'dipinjam' atau 'disetujui', kurangi stok
+                if (!$isOldStatusPinjam && $isNewStatusPinjam) {
+                    foreach ($peminjaman->detailPeminjaman as $detail) {
+                        $alat = Alat::findOrFail($detail->alat_id);
+                        $alat->stok_total -= $detail->jumlah;
+                        $alat->save();
+                    }
+                }
+                
+                // Jika status berubah DARI 'dipinjam'/'disetujui' MENJADI 'dikembalikan' atau 'ditolak', tambah stok kembali
+                if ($isOldStatusPinjam && ($newStatus === 'dikembalikan' || $newStatus === 'ditolak')) {
+                    foreach ($peminjaman->detailPeminjaman as $detail) {
+                        $alat = Alat::findOrFail($detail->alat_id);
+                        $alat->stok_total += $detail->jumlah;
+                        $alat->save();
+                    }
+                }
+            }
+            
+            if ($request->has('details')) {
+                // Hapus detail lama
+                $peminjaman->detailPeminjaman()->delete();
+                
+                // Tambah detail baru
+                foreach ($validated['details'] as $detail) {
+                    DetailPeminjaman::create([
+                        'peminjaman_id' => $peminjaman->id,
+                        'alat_id' => $detail['alat_id'],
+                        'jumlah' => $detail['jumlah'],
+                    ]);
+                }
+            }
+            
+            // LOG AKTIVITAS
             LogAktivitas::create([
-                'user_id' => $request->user()->id,
+                'user_id' => $currentUser->id,
                 'peminjaman_id' => $peminjaman->id,
-                'aksi' => 'approve',
-                'keterangan' => 'Petugas ' . $request->user()->name . ' menyetujui peminjaman',
+                'aksi' => 'update',
+                'keterangan' => 'Petugas ' . $currentUser->name . ' mengupdate peminjaman (Status: ' . $oldStatus . ' → ' . $newStatus . ')',
             ]);
-
+            
             DB::commit();
 
+            // Notifikasi perubahan status ke peminjam
+if ($oldStatus !== $newStatus) {
+    $judulMap = [
+        'disetujui'    => 'Peminjaman Disetujui',
+        'ditolak'      => 'Peminjaman Ditolak',
+        'dipinjam'     => 'Alat Siap Diambil',
+        'dikembalikan' => 'Peminjaman Selesai',
+        'dibatalkan'   => 'Peminjaman Dibatalkan',
+    ];
+    $pesanMap = [
+        'disetujui'    => 'Pengajuan peminjaman #' . $peminjaman->id . ' telah disetujui oleh petugas.',
+        'ditolak'      => 'Pengajuan peminjaman #' . $peminjaman->id . ' ditolak.' . ($peminjaman->catatan_petugas ? ' Catatan: ' . $peminjaman->catatan_petugas : ''),
+        'dipinjam'     => 'Peminjaman #' . $peminjaman->id . ' aktif. Alat sudah siap diambil.',
+        'dikembalikan' => 'Peminjaman #' . $peminjaman->id . ' selesai. Terima kasih sudah mengembalikan tepat waktu.',
+        'dibatalkan'   => 'Peminjaman #' . $peminjaman->id . ' telah dibatalkan.',
+    ];
+
+    if (isset($judulMap[$newStatus])) {
+        \App\Models\Notification::create([
+            'user_id'       => $peminjaman->user_id,
+            'peminjaman_id' => $peminjaman->id,
+            'judul'         => $judulMap[$newStatus],
+            'pesan'         => $pesanMap[$newStatus],
+            'tipe'          => $newStatus,
+        ]);
+    }
+}
+            
             return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
-                ->additional(['message' => 'Peminjaman berhasil disetujui']);
+                ->additional(['message' => 'Peminjaman berhasil diperbarui']);
                 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -205,80 +275,56 @@ class PetugasPeminjamanController extends Controller
         }
     }
 
-    public function reject(Request $request, Peminjaman $peminjaman)
+    public function destroy(Request $request, Peminjaman $peminjaman)
     {
-        if ($peminjaman->status !== 'pending') {
+        if ($peminjaman->status === 'dipinjam') {
             return response()->json([
-                'message' => 'Peminjaman hanya dapat ditolak jika status masih pending.'
-            ], 422);
+                'message' => 'Peminjaman yang sedang berlangsung tidak dapat dihapus.'
+            ], 409);
         }
-
-        $request->validate([
-            'alasan' => 'nullable|string|max:255',
-        ]);
-
-        $peminjaman->update([
-            'status' => 'ditolak',
-            'petugas_approval_id' => $request->user()->id,
-            'catatan_petugas' => $request->alasan,
-        ]);
-
-        LogAktivitas::create([
-            'user_id' => $request->user()->id,
-            'peminjaman_id' => $peminjaman->id,
-            'aksi' => 'reject',
-            'keterangan' => 'Petugas ' . $request->user()->name . ' menolak peminjaman. Alasan: ' . ($request->alasan ?? '-'),
-        ]);
-
-        return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
-            ->additional(['message' => 'Peminjaman berhasil ditolak']);
-    }
-
-    public function kembalikan(Request $request, Peminjaman $peminjaman)
-    {
-        if ($peminjaman->status !== 'dipinjam') {
-            return response()->json([
-                'message' => 'Pengembalian hanya dapat dilakukan untuk peminjaman yang sedang dipinjam.'
-            ], 422);
-        }
-
+        
         DB::beginTransaction();
         
         try {
-            foreach ($peminjaman->detailPeminjaman as $detail) {
-                $alat = Alat::findOrFail($detail->alat_id);
-                $alat->increment('stok_total', $detail->jumlah);
+            $currentUser = $request->user();
+            
+            if (!$currentUser) {
+                return response()->json(['message' => 'Unauthorized'], 401);
             }
-
-            $peminjaman->update([
-                'status' => 'dikembalikan',
-                'tanggal_kembali_actual' => now()->format('Y-m-d'),
-            ]);
-
+            
+            $peminjamanId = $peminjaman->id;
+            $peminjamanStatus = $peminjaman->status;
+            
+            // Log aktivitas SEBELUM delete
             LogAktivitas::create([
-                'user_id' => $request->user()->id,
-                'peminjaman_id' => $peminjaman->id,
-                'aksi' => 'return',
-                'keterangan' => 'Petugas ' . $request->user()->name . ' mengkonfirmasi pengembalian alat',
+                'user_id' => $currentUser->id,
+                'peminjaman_id' => $peminjamanId,
+                'aksi' => 'delete',
+                'keterangan' => 'Petugas ' . $currentUser->name . ' menghapus peminjaman status ' . $peminjamanStatus,
             ]);
-
+            
+            // Hapus peminjaman
+            $peminjaman->detailPeminjaman()->delete();
+            $peminjaman->delete();
+            
             DB::commit();
-
-            return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
-                ->additional(['message' => 'Peminjaman berhasil dikembalikan']);
-                
+            
+            return response()->json([
+                'message' => 'Peminjaman berhasil dihapus'
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 
-     /**
-     * EXPORT PEMINJAMAN (untuk petugas)
+    /**
+     * Export peminjaman ke Excel atau PDF
      */
     public function export(Request $request)
     {
         $query = Peminjaman::with(['user', 'petugasApproval', 'detailPeminjaman.alat']);
+        $user = $request->user();
 
         // SEARCH
         if ($request->filled('search')) {
@@ -286,7 +332,7 @@ class PetugasPeminjamanController extends Controller
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereHas('user', function ($q2) use ($searchTerm) {
                     $q2->where('name', 'like', $searchTerm)
-                       ->orWhere('email', 'like', $searchTerm);
+                      ->orWhere('email', 'like', $searchTerm);
                 })->orWhereHas('detailPeminjaman.alat', function ($q2) use ($searchTerm) {
                     $q2->where('nama_alat', 'like', $searchTerm);
                 });
@@ -298,7 +344,7 @@ class PetugasPeminjamanController extends Controller
             $query->where('status', $request->input('filter.status'));
         }
 
-        // FILTER TANGGAL PINJAM
+        // FILTER TANGGAL
         if ($request->has('filter.tanggal_pinjam_from') && $request->has('filter.tanggal_pinjam_to')) {
             $query->whereBetween('tanggal_pinjam', [
                 $request->input('filter.tanggal_pinjam_from'),
@@ -307,21 +353,21 @@ class PetugasPeminjamanController extends Controller
         }
 
         $peminjamans = $query->orderBy('created_at', 'desc')->get();
-        
         $format = $request->input('format', 'excel');
-        
+
         if ($format === 'pdf') {
-            $pdf = Pdf::loadView('reports.peminjaman', [
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.peminjaman', [
                 'peminjamans' => $peminjamans,
-                'title' => 'Laporan Peminjaman - Petugas',
+                'user' => $user,
                 'tanggal_from' => $request->input('filter.tanggal_pinjam_from'),
                 'tanggal_to' => $request->input('filter.tanggal_pinjam_to'),
-                'exported_at' => now()
             ]);
-            
-            return $pdf->download('laporan_peminjaman_' . now()->format('Ymd_His') . '.pdf');
+            return $pdf->download('laporan_peminjaman_petugas_' . now()->format('Ymd_His') . '.pdf');
         }
-        
-        return Excel::download(new PeminjamanExport($peminjamans), 'laporan_peminjaman_' . now()->format('Ymd_His') . '.xlsx');
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\PeminjamanExport($peminjamans),
+            'laporan_peminjaman_petugas_' . now()->format('Ymd_His') . '.xlsx'
+        );
     }
 }

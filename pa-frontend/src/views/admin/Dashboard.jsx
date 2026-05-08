@@ -4,8 +4,8 @@ import {
   Clock, CheckCircle, XCircle, ChevronRight, ArrowUpRight
 } from 'lucide-react';
 import api from '../../services/api';
+import { useDataContext } from '../../contexts/DataContext';
 
-// ─── Stat Card Component ───
 function StatCard({ label, value, icon: Icon, accentColor, bgColor, trend }) {
   const isPositive = trend >= 0;
   return (
@@ -17,7 +17,7 @@ function StatCard({ label, value, icon: Icon, accentColor, bgColor, trend }) {
         </div>
         <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isPositive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
           {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-          {trend}
+          {trend >= 0 ? '+' : ''}{trend}
         </span>
       </div>
       <div className="relative z-10">
@@ -28,7 +28,6 @@ function StatCard({ label, value, icon: Icon, accentColor, bgColor, trend }) {
   );
 }
 
-// ─── Skeleton Stat Card ───
 function SkeletonStatCard() {
   return (
     <div className="rounded-2xl p-5 flex flex-col gap-4 relative overflow-hidden bg-white border border-gray-100 shadow-sm animate-pulse">
@@ -44,7 +43,6 @@ function SkeletonStatCard() {
   );
 }
 
-// ─── Skeleton Chart Loader ───
 function SkeletonChartLoader() {
   return (
     <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
@@ -57,7 +55,6 @@ function SkeletonChartLoader() {
   );
 }
 
-// ─── Skeleton Table Row ───
 function SkeletonTableRow() {
   return (
     <tr className="animate-pulse">
@@ -77,7 +74,6 @@ function SkeletonTableRow() {
   );
 }
 
-// ─── Skeleton Top Alat Loader ───
 function SkeletonTopAlatLoader() {
   return (
     <div className="space-y-5">
@@ -94,7 +90,6 @@ function SkeletonTopAlatLoader() {
   );
 }
 
-// ─── Line Chart Component ───
 function LineChart({ data = [] }) {
   if (!data || data.length === 0) {
     return (
@@ -105,7 +100,6 @@ function LineChart({ data = [] }) {
     );
   }
 
-  // Ukuran kanvas SVG (Virtual Units)
   const W = 1000; 
   const H = 300;
   const PAD_TOP = 40;
@@ -114,7 +108,6 @@ function LineChart({ data = [] }) {
 
   const maxVal = Math.max(...data.map(d => d.total || 0), 5);
   
-  // Kalkulasi Titik
   const pts = data.map((d, i) => ({
     x: PAD_SIDE + (i / (data.length - 1 || 1)) * (W - PAD_SIDE * 2),
     y: PAD_TOP + (1 - (d.total || 0) / maxVal) * (H - PAD_TOP - PAD_BTM),
@@ -127,7 +120,6 @@ function LineChart({ data = [] }) {
 
   return (
     <div className="w-full h-auto">
-      {/* viewBox membuat SVG ini elastis mengikuti lebar div pembungkus */}
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
@@ -136,7 +128,6 @@ function LineChart({ data = [] }) {
           </linearGradient>
         </defs>
 
-        {/* Garis Grid Horizontal & Angka Sumbu Y */}
         {[0, 0.5, 1].map((t, i) => {
           const yPos = PAD_TOP + t * (H - PAD_TOP - PAD_BTM);
           return (
@@ -149,22 +140,15 @@ function LineChart({ data = [] }) {
           );
         })}
 
-        {/* Gambar Area & Garis */}
         <path d={areaPath} fill="url(#chartGrad)" />
         <path d={linePath} fill="none" stroke="#3F51B5" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* Titik Data & Label Tanggal */}
         {pts.map((p, i) => (
           <g key={i}>
-            {/* Titik Putih dengan Border Biru */}
             <circle cx={p.x} cy={p.y} r="6" fill="#fff" stroke="#3F51B5" strokeWidth="3" />
-            
-            {/* Label Nilai di Atas Titik */}
             <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="14" fontWeight="800" fill="#3F51B5">
               {p.val}
             </text>
-
-            {/* Label Tanggal di Bawah (Format: DD/MM) */}
             <text x={p.x} y={H - 25} textAnchor="middle" fontSize="14" fill="#64748B" className="font-bold">
               {p.date ? p.date.split('-').reverse().slice(0, 2).join('/') : ''}
             </text>
@@ -175,22 +159,26 @@ function LineChart({ data = [] }) {
   );
 }
 
-// ─── Main Dashboard ───
 export default function AdminDashboard() {
-  const [dbData, setDbData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { dashboardData: dbData, setDashboardData } = useDataContext();
+  const [loading, setLoading] = useState(!dbData);
 
   useEffect(() => {
-    api.get('/dashboard/admin')
-      .then(res => {
-        setDbData(res.data.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Gagal load data dashboard:", err);
-        setLoading(false);
-      });
-  }, []);
+    if (!dbData) {
+      setLoading(true);
+      api.get('/dashboard/admin')
+        .then(res => {
+          setDashboardData(res.data.data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error("Gagal load data:", err);
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [dbData, setDashboardData]);
 
   const stats = dbData?.stats;
   const STAT_CARDS = [
@@ -203,7 +191,6 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6 font-['Sora']">
       
-      {/* 1. Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {loading
           ? [1, 2, 3, 4].map(i => <SkeletonStatCard key={i} />)
@@ -211,7 +198,6 @@ export default function AdminDashboard() {
         }
       </div>
 
-      {/* 2. Chart Section */}
       {loading ? (
         <SkeletonChartLoader />
       ) : (
@@ -226,7 +212,6 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
-        {/* 3. Peminjaman Terbaru (Laravel: peminjaman_terbaru) */}
         <div className="lg:col-span-3 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-base font-bold text-gray-800">Peminjaman Terbaru</h3>
@@ -270,7 +255,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* 4. Top Alat (Laravel: top_alat) */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <h3 className="text-base font-bold text-gray-800 mb-5">Top Alat Dipinjam</h3>
           {loading ? (

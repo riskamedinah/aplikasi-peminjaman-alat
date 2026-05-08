@@ -45,7 +45,7 @@ class PeminjamanController extends Controller
                 'tanggal_pinjam' => $validated['tanggal_pinjam'],
                 'tanggal_kembali_rencana' => $validated['tanggal_kembali_rencana'],
                 'keperluan' => $validated['keperluan'],
-                'status' => 'pending',
+                'status' => 'menunggu',
             ]);
 
             foreach ($validated['details'] as $detail) {
@@ -57,6 +57,15 @@ class PeminjamanController extends Controller
             }
 
             DB::commit();
+
+            // Notifikasi konfirmasi pengajuan
+\App\Models\Notification::create([
+    'user_id'       => $peminjaman->user_id,
+    'peminjaman_id' => $peminjaman->id,
+    'judul'         => 'Pengajuan Diterima',
+    'pesan'         => 'Pengajuan peminjaman #' . $peminjaman->id . ' sudah diterima dan sedang menunggu persetujuan petugas.',
+    'tipe'          => 'menunggu',
+]);
 
             return (new PeminjamanResource($peminjaman->load(['user', 'detailPeminjaman.alat'])))
                 ->additional(['message' => 'Peminjaman berhasil diajukan'])
@@ -140,7 +149,7 @@ class PeminjamanController extends Controller
             }
 
             $peminjaman->update([
-                'status' => 'pending',
+                'status' => 'menunggu',
             ]);
 
             DB::commit();

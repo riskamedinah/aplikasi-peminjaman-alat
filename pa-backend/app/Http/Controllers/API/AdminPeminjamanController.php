@@ -234,6 +234,34 @@ class AdminPeminjamanController extends Controller
             ]);
             
             DB::commit();
+
+            // Notifikasi perubahan status ke peminjam
+if ($oldStatus !== $newStatus) {
+    $judulMap = [
+        'disetujui'    => 'Peminjaman Disetujui',
+        'ditolak'      => 'Peminjaman Ditolak',
+        'dipinjam'     => 'Alat Siap Diambil',
+        'dikembalikan' => 'Peminjaman Selesai',
+        'dibatalkan'   => 'Peminjaman Dibatalkan',
+    ];
+    $pesanMap = [
+        'disetujui'    => 'Pengajuan peminjaman #' . $peminjaman->id . ' telah disetujui oleh petugas.',
+        'ditolak'      => 'Pengajuan peminjaman #' . $peminjaman->id . ' ditolak.' . ($peminjaman->catatan_petugas ? ' Catatan: ' . $peminjaman->catatan_petugas : ''),
+        'dipinjam'     => 'Peminjaman #' . $peminjaman->id . ' aktif. Alat sudah siap diambil.',
+        'dikembalikan' => 'Peminjaman #' . $peminjaman->id . ' selesai. Terima kasih sudah mengembalikan tepat waktu.',
+        'dibatalkan'   => 'Peminjaman #' . $peminjaman->id . ' telah dibatalkan.',
+    ];
+
+    if (isset($judulMap[$newStatus])) {
+        \App\Models\Notification::create([
+            'user_id'       => $peminjaman->user_id,
+            'peminjaman_id' => $peminjaman->id,
+            'judul'         => $judulMap[$newStatus],
+            'pesan'         => $pesanMap[$newStatus],
+            'tipe'          => $newStatus,
+        ]);
+    }
+}
             
             return (new PeminjamanResource($peminjaman->load(['user', 'petugasApproval', 'detailPeminjaman.alat'])))
                 ->additional(['message' => 'Peminjaman berhasil diperbarui']);

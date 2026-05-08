@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { useDataContext } from '../../contexts/DataContext';
 import api from '../../services/api';
 
 const Login = () => {
@@ -9,6 +10,7 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const { setDashboardData, loadInitialData } = useDataContext();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -26,22 +28,28 @@ const Login = () => {
 
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
+      await loadInitialData();
+
       if (role === 'admin') {
+        const dashRes = await api.get('/dashboard/admin');
+        setDashboardData(dashRes.data.data);
         navigate('/admin/dashboard', { replace: true });
       } else if (role === 'petugas') {
-        navigate('/petugas/dashboard', { replace: true });
+  const dashRes = await api.get('/dashboard/petugas');
+  setDashboardData(dashRes.data.data);
+  navigate('/petugas/dashboard', { replace: true });
       } else {
-        navigate('/peminjam/dashboard', { replace: true });
+        navigate('/peminjam/katalog', { replace: true });
       }
-    } catch (err) {
-      if (err.response && err.response.status === 422) {
-        setError(err.response.data.message);
-      } else {
-        setError('Terjadi kesalahan pada server. Coba lagi nanti.');
-      }
-    } finally {
-      setLoading(false);
-    }
+   } catch (err) {
+  if (err.response?.status === 422) {
+    setError(err.response.data.message);
+  } else {
+    setError('Email atau password salah.');
+  }
+} finally {
+  setLoading(false);
+}
   };
 
   return (
