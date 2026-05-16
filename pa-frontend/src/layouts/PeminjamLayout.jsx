@@ -19,7 +19,7 @@ export default function PeminjamLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
   const userName = userData.name || 'Peminjam';
-  const { notifications, unreadCount, open, setOpen, markAllRead, markOneRead } = useNotifications();
+  const { notifications, unreadCount, open, setOpen, markAllRead, markOneRead, deleteAllRead } = useNotifications();
   const bellRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -66,7 +66,7 @@ export default function PeminjamLayout() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/logo-grafika.webp" alt="Logo" style={{ width: 32, height: 32, objectFit: 'contain' }} />
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>
-              Sarana Prasarana
+              Altera
             </span>
           </div>
 
@@ -91,144 +91,153 @@ export default function PeminjamLayout() {
           {/* Right: Bell + User */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
 
-            {/* Bell */}
-            <div ref={bellRef} style={{ position: 'relative' }}>
-              <button
-                onClick={() => setOpen(o => !o)}
-                style={{
-                  position: 'relative',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: 10, width: 38, height: 38,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: '#fff',
+{/* Bell */}
+<div ref={bellRef} style={{ position: 'relative' }}>
+  <button
+    onClick={() => setOpen(o => !o)}
+    style={{
+      position: 'relative',
+      background: 'rgba(255,255,255,0.1)',
+      border: '1px solid rgba(255,255,255,0.15)',
+      borderRadius: 10, width: 38, height: 38,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      cursor: 'pointer', color: '#fff',
+    }}
+  >
+    <Bell size={17} />
+    {unreadCount > 0 && (
+      <span style={{
+        position: 'absolute', top: 7, right: 7,
+        width: 7, height: 7, borderRadius: '50%',
+        backgroundColor: '#EF4444',
+        border: '1.5px solid #1A1F3C',
+      }} />
+    )}
+  </button>
+
+  {open && (
+    <div style={{
+      position: 'absolute', top: 48, right: 0,
+      width: 360, backgroundColor: '#fff',
+      borderRadius: 14,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+      border: '1px solid #E8EAF6',
+      overflow: 'hidden', zIndex: 200,
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '14px 16px', borderBottom: '1px solid #F0F0F0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>Notifikasi</span>
+          {unreadCount > 0 && (
+            <span style={{
+              fontSize: 11, fontWeight: 700,
+              backgroundColor: '#EF4444', color: '#fff',
+              padding: '2px 7px', borderRadius: 10,
+            }}>
+              {unreadCount}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {unreadCount > 0 && (
+            <button onClick={markAllRead} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 12, color: '#3F51B5', fontWeight: 600,
+            }}>
+              <CheckCheck size={14} /> Tandai semua dibaca
+            </button>
+          )}
+          {notifications.some(n => n.is_read) && (
+            <button onClick={deleteAllRead} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 12, color: '#E53935', fontWeight: 600,
+            }}>
+              Hapus dibaca
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+        {notifications.length === 0 ? (
+          <div style={{
+            padding: '40px 20px', textAlign: 'center',
+            color: '#888', fontSize: 13,
+          }}>
+            <Bell size={28} color="#E0E0E0" style={{ display: 'block', margin: '0 auto 8px' }} />
+            <p style={{ margin: 0 }}>Belum ada notifikasi</p>
+          </div>
+        ) : (
+          notifications.map(n => {
+            const cfg = TIPE_CONFIG[n.tipe] ?? { color: '#888', bg: '#F5F5F5' };
+            return (
+              <div
+                key={n.id}
+                onClick={() => {
+                  if (!n.is_read) markOneRead(n.id);
+                  if (n.peminjaman_id) navigate('/peminjam/riwayat');
+                  setOpen(false);
                 }}
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid #F5F5F5',
+                  backgroundColor: n.is_read ? '#fff' : '#F8F9FF',
+                  cursor: 'pointer',
+                  display: 'flex', gap: 12, alignItems: 'flex-start',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0F4FF'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = n.is_read ? '#fff' : '#F8F9FF'}
               >
-                <Bell size={17} />
-                {unreadCount > 0 && (
-                  <span style={{
-                    position: 'absolute', top: 7, right: 7,
+                {/* Dot kiri — abu-abu kalau sudah dibaca */}
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  backgroundColor: n.is_read ? '#D0D0D0' : cfg.color,
+                  marginTop: 5, flexShrink: 0,
+                }} />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'flex-start', gap: 8,
+                  }}>
+                    <span style={{
+                      fontSize: 13,
+                      fontWeight: n.is_read ? 500 : 700,
+                      color: '#1A1A2E',
+                    }}>
+                      {n.judul}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {formatTime(n.created_at)}
+                    </span>
+                  </div>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, color: '#666', lineHeight: 1.5 }}>
+                    {n.pesan}
+                  </p>
+                </div>
+
+                {/* Dot kanan — hilang kalau sudah dibaca */}
+                {!n.is_read && (
+                  <div style={{
                     width: 7, height: 7, borderRadius: '50%',
-                    backgroundColor: '#EF4444',
-                    border: '1.5px solid #1A1F3C',
+                    backgroundColor: '#3F51B5',
+                    flexShrink: 0, marginTop: 5,
                   }} />
                 )}
-              </button>
-
-              {/* Dropdown Notifikasi */}
-              {open && (
-                <div style={{
-                  position: 'absolute', top: 48, right: 0,
-                  width: 360, backgroundColor: '#fff',
-                  borderRadius: 14,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-                  border: '1px solid #E8EAF6',
-                  overflow: 'hidden', zIndex: 200,
-                }}>
-                  {/* Header */}
-                  <div style={{
-                    padding: '14px 16px', borderBottom: '1px solid #F0F0F0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>Notifikasi</span>
-                      {unreadCount > 0 && (
-                        <span style={{
-                          fontSize: 11, fontWeight: 700,
-                          backgroundColor: '#EF4444', color: '#fff',
-                          padding: '2px 7px', borderRadius: 10,
-                        }}>
-                          {unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    {unreadCount > 0 && (
-                      <button onClick={markAllRead} style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        fontSize: 12, color: '#3F51B5', fontWeight: 600,
-                      }}>
-                        <CheckCheck size={14} /> Tandai semua dibaca
-                      </button>
-                    )}
-                  </div>
-
-                  {/* List */}
-                  <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-                    {notifications.length === 0 ? (
-                      <div style={{
-                        padding: '40px 20px', textAlign: 'center',
-                        color: '#888', fontSize: 13,
-                      }}>
-                        <Bell size={28} color="#E0E0E0" style={{ marginBottom: 8, display: 'block', margin: '0 auto 8px' }} />
-                        <p style={{ margin: 0 }}>Belum ada notifikasi</p>
-                      </div>
-                    ) : (
-                      notifications.map(n => {
-                        const cfg = TIPE_CONFIG[n.tipe] ?? { color: '#888', bg: '#F5F5F5' };
-                        return (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              if (!n.is_read) markOneRead(n.id);
-                              if (n.peminjaman_id) navigate('/peminjam/riwayat');
-                              setOpen(false);
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              borderBottom: '1px solid #F5F5F5',
-                              backgroundColor: n.is_read ? '#fff' : '#F8F9FF',
-                              cursor: 'pointer',
-                              display: 'flex', gap: 12, alignItems: 'flex-start',
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F0F4FF'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = n.is_read ? '#fff' : '#F8F9FF'}
-                          >
-                            {/* Tipe dot */}
-                            <div style={{
-                              width: 8, height: 8, borderRadius: '50%',
-                              backgroundColor: cfg.color,
-                              marginTop: 5, flexShrink: 0,
-                            }} />
-
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{
-                                display: 'flex', justifyContent: 'space-between',
-                                alignItems: 'flex-start', gap: 8,
-                              }}>
-                                <span style={{
-                                  fontSize: 13,
-                                  fontWeight: n.is_read ? 500 : 700,
-                                  color: '#1A1A2E',
-                                }}>
-                                  {n.judul}
-                                </span>
-                                <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                  {formatTime(n.created_at)}
-                                </span>
-                              </div>
-                              <p style={{ margin: '3px 0 0', fontSize: 12, color: '#666', lineHeight: 1.5 }}>
-                                {n.pesan}
-                              </p>
-                            </div>
-
-                            {/* Unread indicator */}
-                            {!n.is_read && (
-                              <div style={{
-                                width: 7, height: 7, borderRadius: '50%',
-                                backgroundColor: '#3F51B5',
-                                flexShrink: 0, marginTop: 5,
-                              }} />
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  )}
+</div>
 
             {/* User Menu */}
             <div ref={menuRef} style={{ position: 'relative' }}>

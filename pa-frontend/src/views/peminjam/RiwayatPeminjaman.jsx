@@ -135,6 +135,9 @@ export default function RiwayatPeminjaman() {
           {data.map(item => {
             const st = STATUS_CONFIG[item.status] ?? { label: item.status, color: '#888', bg: '#F5F5F5', border: '#E0E0E0' };
             const isExpanded = expandedId === item.id;
+            const isLate = item.status === 'dipinjam' &&
+  item.tanggal_kembali_rencana &&
+  new Date(item.tanggal_kembali_rencana) < new Date(new Date().toDateString());
 
             return (
               <div key={item.id} style={{
@@ -148,13 +151,26 @@ export default function RiwayatPeminjaman() {
                   style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}
                   onClick={() => setExpandedId(isExpanded ? null : item.id)}
                 >
-                  {/* Status */}
-                  <div style={{
-                    backgroundColor: st.bg, border: `1px solid ${st.border}`,
-                    borderRadius: 20, padding: '4px 12px', whiteSpace: 'nowrap',
-                  }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: st.color }}>{st.label}</span>
-                  </div>
+                 {/* Status */}
+<div style={{
+  backgroundColor: st.bg, border: `1px solid ${st.border}`,
+  borderRadius: 20, padding: '4px 12px', whiteSpace: 'nowrap',
+}}>
+  <span style={{ fontSize: 12, fontWeight: 700, color: st.color }}>{st.label}</span>
+</div>
+
+{/* Tambah ini setelah badge status */}
+{isLate && (
+  <div style={{
+    backgroundColor: '#FFEBEE', border: '1px solid #EF9A9A',
+    borderRadius: 20, padding: '4px 12px', whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center', gap: 4,
+  }}>
+    <span style={{ fontSize: 12, fontWeight: 700, color: '#C62828' }}>
+      Terlambat {Math.floor((new Date() - new Date(item.tanggal_kembali_rencana)) / (1000 * 60 * 60 * 24))} hari
+    </span>
+  </div>
+)}
 
                   {/* Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -241,7 +257,22 @@ export default function RiwayatPeminjaman() {
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Informasi
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+  {isLate && (
+    <div style={{
+      padding: '8px 12px', backgroundColor: '#FFEBEE',
+      borderRadius: 8, border: '1px solid #EF9A9A',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#C62828', marginBottom: 4 }}>
+        TERLAMBAT DIKEMBALIKAN
+      </div>
+      <div style={{ fontSize: 13, color: '#C62828' }}>
+        Sudah melewati deadline {Math.floor((new Date() - new Date(item.tanggal_kembali_rencana)) / (1000 * 60 * 60 * 24))} hari.
+        Segera kembalikan alat ke petugas.
+      </div>
+    </div>
+  )}
+                          
                           <InfoRow label="Keperluan" value={item.keperluan} />
                           {item.petugas_approval && <InfoRow label="Disetujui oleh" value={item.petugas_approval.name} />}
                           {item.catatan_petugas && (

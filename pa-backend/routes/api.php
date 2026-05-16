@@ -26,6 +26,7 @@ Route::middleware('role:peminjam')->group(function () {
     Route::get('/notifikasi', [NotificationController::class, 'index']);
     Route::post('/notifikasi/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifikasi/{notification}/read', [NotificationController::class, 'markOneRead']);
+    Route::delete('/notifikasi/read', [NotificationController::class, 'deleteRead']);
 });
 
     // ==============================================
@@ -85,6 +86,7 @@ Route::middleware('role:peminjam')->group(function () {
     Route::prefix('admin')->middleware('role:admin')->group(function () {
         Route::get('/peminjaman', [AdminPeminjamanController::class, 'index']);
         Route::get('/peminjaman/export', [AdminPeminjamanController::class, 'export']);
+        Route::get('/peminjaman/pending-count', [AdminPeminjamanController::class, 'getPendingCount']);
         Route::get('/peminjaman/{peminjaman}', [AdminPeminjamanController::class, 'show']);
         Route::post('/peminjaman', [AdminPeminjamanController::class, 'store']);
         Route::put('/peminjaman/{peminjaman}', [AdminPeminjamanController::class, 'update']);
@@ -97,6 +99,7 @@ Route::middleware('role:peminjam')->group(function () {
 Route::prefix('petugas')->middleware('role:admin,petugas')->group(function () {
     Route::get('/peminjaman', [PetugasPeminjamanController::class, 'index']);
     Route::get('/peminjaman/export', [PetugasPeminjamanController::class, 'export']);
+    Route::get('/peminjaman/pending-count', [PetugasPeminjamanController::class, 'getPendingCount']); // ← tambah ini
     Route::get('/peminjaman/{peminjaman}', [PetugasPeminjamanController::class, 'show']);
     Route::post('/peminjaman', [PetugasPeminjamanController::class, 'store']);
     Route::put('/peminjaman/{peminjaman}', [PetugasPeminjamanController::class, 'update']);

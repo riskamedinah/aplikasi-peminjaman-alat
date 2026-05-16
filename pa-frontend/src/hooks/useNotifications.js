@@ -20,8 +20,13 @@ export function useNotifications() {
 
   useEffect(() => {
     fetch();
-    const interval = setInterval(fetch, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetch, 15000);
+    const onFocus = () => fetch();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [fetch]);
 
   const markAllRead = async () => {
@@ -42,14 +47,21 @@ export function useNotifications() {
     } catch (_) {}
   };
 
+  const deleteAllRead = async () => {
+    try {
+      await api.delete('/notifikasi/read');
+      setNotifications(prev => prev.filter(n => !n.is_read));
+    } catch (_) {}
+  };
+
   return {
     notifications,
     unreadCount,
-    open,
-    setOpen,
+    open, setOpen,
     loading,
     markAllRead,
     markOneRead,
+    deleteAllRead,
     refresh: fetch,
   };
 }

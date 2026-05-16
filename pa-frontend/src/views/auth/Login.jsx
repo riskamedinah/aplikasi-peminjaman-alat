@@ -298,7 +298,7 @@ const Login = () => {
   <div className="brand-icon">
     <img src="/logo-grafika.webp" alt="Logo Sekolah" className="school-logo" />
   </div>
-  <span className="brand-name">Sarana Prasarana</span>
+  <span className="brand-name">Altera</span>
 </div>
 
           <div className="left-body">

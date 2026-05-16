@@ -38,4 +38,13 @@ class NotificationController extends Controller
         $notification->update(['is_read' => true]);
         return response()->json(['message' => 'OK']);
     }
+
+    public function deleteRead(Request $request)
+{
+    Notification::where('user_id', $request->user()->id)
+        ->where('is_read', true)
+        ->delete();
+
+    return response()->json(['message' => 'Notifikasi yang sudah dibaca berhasil dihapus']);
+}
 }

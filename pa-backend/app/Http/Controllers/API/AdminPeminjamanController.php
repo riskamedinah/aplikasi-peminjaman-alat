@@ -63,6 +63,27 @@ class AdminPeminjamanController extends Controller
         return PeminjamanResource::collection($peminjamans);
     }
 
+    public function getPendingCount()
+{
+    $pending = Peminjaman::where('status', 'menunggu')->count();
+    $terbaru = Peminjaman::with(['user'])
+        ->where('status', 'menunggu')
+        ->latest()
+        ->take(5)
+        ->get()
+        ->map(fn($p) => [
+            'id'        => $p->id,
+            'user_name' => $p->user->name ?? 'Unknown',
+            'keperluan' => $p->keperluan,
+            'created_at'=> $p->created_at,
+        ]);
+
+    return response()->json([
+        'pending_count' => $pending,
+        'data'          => $terbaru,
+    ]);
+}
+
     public function store(AdminPeminjamanRequest $request)
     {
         DB::beginTransaction();
